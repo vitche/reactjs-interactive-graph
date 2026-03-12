@@ -105,6 +105,7 @@ ref.current.cosmos.fitView()
 | `addNodes(nodes, links?, opts?)` | Add nodes and links |
 | `addLinks(links)` | Add links between existing nodes |
 | `removeNodes(ids)` | Remove nodes by ID |
+| `removeLinks(linkIds)` | Remove links by source→target pairs |
 | `updateNode(id, patch)` | Update color/size of a single node |
 | `updateNodes(patches)` | Batch update nodes |
 | `updateLinks(patches)` | Batch update links |
@@ -217,12 +218,12 @@ After adding new nodes, automatically triggers a soft simulation restart (alpha 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `source` | `string \| number` | yes | Source node ID |
+| `source` | `string \| number` | yes | Source node ID. Arrow points from source to target |
 | `target` | `string \| number` | yes | Target node ID |
-| `color` | `string` | no | Hex color. Default: `'#2a3a4a'` |
+| `color` | `string` | no | Hex color (6 or 8 chars). 8-char hex includes alpha, e.g. `'#2a3a4a80'`. Default: `'#2a3a4a'` |
 | `width` | `number` | no | Width (0.5–20). Computed from `weight` if not set |
 | `weight` | `number` | no | Edge weight. Affects width and simulation spring strength |
-| `directed` | `boolean` | no | Show arrow. Default: `true` |
+| `directed` | `boolean` | no | Show arrow. Default: `true`. Requires `linkDefaultArrows: true` in cosmos config |
 
 `opts.parentId` — ID of an existing node. New nodes will spawn around it in a circle.
 
@@ -330,6 +331,17 @@ Removes nodes by an array of IDs. All associated links are removed automatically
 
 ```js
 gm.removeNodes(['child2', 'child3']);
+```
+
+#### `removeLinks(linkIds)`
+
+Removes links by source→target pairs. Nodes are not affected.
+
+```js
+gm.removeLinks([
+  { source: 'hub', target: 'child1' },
+  { source: 'child1', target: 'child2' },
+]);
 ```
 
 ---
@@ -486,9 +498,15 @@ hexToRgba('#ff336680');       // [1, 0.2, 0.4, 0.5] — 8-digit hex
 
 **Colors** — hex strings (`'#ff3366'`). 3, 6, and 8-character formats are supported. The library converts to RGBA floats automatically.
 
+**Transparency** — use 8-character hex to set per-node or per-link alpha: `'#ff336680'` = 50% opacity. Or set global opacity via `pointOpacity` / `linkOpacity` in cosmos config.
+
 **Node sizes** — numbers. Default: `8`. Cosmos scales on zoom if `scalePointsOnZoom: true`.
 
-**Links** — directed by default (with arrow). Deduplicated by `"source→target"` key.
+**Links** — directed by default (with arrow from source to target). Deduplicated by `"source→target"` key. `A→B` and `B→A` are separate links. For bidirectional edges, add both.
+
+**Arrows** — per-link `directed` field controls arrow visibility, but arrows must be enabled globally via `linkDefaultArrows: true` in cosmos config. Arrow size is controlled by `linkArrowsSizeScale`.
+
+**Curved links** — enable via `curvedLinks: true` in cosmos config. Useful when there are bidirectional edges (A→B and B→A) — curved lines separate them visually instead of overlapping.
 
 **Positioning** — new nodes without `x`/`y` appear near the center (`spaceSize / 2`) with slight jitter. With `parentId` — placed in a circle around the parent node.
 

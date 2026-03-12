@@ -16,7 +16,7 @@ export class GraphManager {
 
   /** @type {Array<{source: string|number, target: string|number, color?: string, width?: number, weight?: number, directed?: boolean}>} */
   links = [];
-  /** @type {Set<string>} */
+  /** @type {Set<string>} "source→target" dedup keys. Directed: A→B and B→A are separate. */
   _edgeKeys = new Set();
 
   /** @type {Graph} cosmos.gl instance — use directly for camera, selection, simulation, etc. */
@@ -58,13 +58,21 @@ export class GraphManager {
    * @param {string} key - unique name (e.g. 'ethereum', 'user-avatar')
    * @param {string|HTMLImageElement|ImageData} source - URL, <img>, or ImageData
    * @param {number} [size=64] - render size (width & height for rasterization)
-   * @returns {Promise<void>}
+   * @returns {Promise<boolean>} true on success, false on failure
    */
   async registerImage(key, source, size = 64) {
-    const imageData = await this._toImageData(source, size);
+    if (this._destroyed) return false;
+    let imageData;
+    try {
+      imageData = await this._toImageData(source, size);
+    } catch (e) {
+      console.warn(`[GraphManager] registerImage('${key}') failed:`, e.message);
+      return false;
+    }
+    if (this._destroyed) return false;
+
     const existing = this._images.get(key);
     if (existing) {
-      // Replace in-place
       existing.imageData = imageData;
       this._imageList[existing.cosmosIndex] = imageData;
     } else {
@@ -73,11 +81,11 @@ export class GraphManager {
       this._images.set(key, { imageData, cosmosIndex });
     }
     this.cosmos.setImageData(this._imageList);
-    // Re-flush if graph already has nodes (some may reference this key)
     if (this.nodes.length > 0) {
       this._flushImages();
       this.cosmos.render();
     }
+    return true;
   }
 
   /**
@@ -100,6 +108,7 @@ export class GraphManager {
    * Triggers a soft simulation restart (alpha 0.3) if new nodes were added.
    */
   addNodes(newNodes, newLinks = [], { parentId } = {}) {
+    if (this._destroyed) return;
     const oldCount = this.nodes.length;
     const parentPos = this._getParentPos(parentId);
 
@@ -124,6 +133,7 @@ export class GraphManager {
    * Add links only (nodes must already exist). Duplicates are skipped.
    */
   addLinks(newLinks) {
+    if (this._destroyed) return;
     const before = this.links.length;
     this._insertLinks(newLinks);
     if (this.links.length > before) {
@@ -138,6 +148,7 @@ export class GraphManager {
    * Remove nodes by IDs. Associated links are removed automatically.
    */
   removeNodes(ids) {
+    if (this._destroyed) return;
     const removing = new Set(ids.filter(id => this.nodeIndex.has(id)));
     if (removing.size === 0) return;
 
@@ -174,12 +185,37 @@ export class GraphManager {
     this.cosmos.render();
   }
 
+  /**
+   * Remove links by source→target pairs. Nodes are not affected.
+   * @param {Array<{source: string|number, target: string|number}>} linkIds
+   */
+  removeLinks(linkIds) {
+    if (this._destroyed) return;
+    const toRemove = new Set(linkIds.map(l => `${l.source}→${l.target}`));
+    const before = this.links.length;
+
+    this.links = this.links.filter(l => {
+      const key = `${l.source}→${l.target}`;
+      if (toRemove.has(key)) {
+        this._edgeKeys.delete(key);
+        return false;
+      }
+      return true;
+    });
+
+    if (this.links.length < before) {
+      this._flushLinks();
+      this.cosmos.render();
+    }
+  }
+
   // ── Update ─────────────────────────────────────────────
 
   /**
    * Update a single node's color and/or size.
    */
   updateNode(id, { color, size } = {}) {
+    if (this._destroyed) return;
     const idx = this.nodeIndex.get(id);
     if (idx === undefined) return;
     const node = this.nodes[idx];
@@ -194,6 +230,7 @@ export class GraphManager {
    * @param {Array<{id, color?, size?}>} patches
    */
   updateNodes(patches) {
+    if (this._destroyed) return;
     for (const { id, color, size } of patches) {
       const idx = this.nodeIndex.get(id);
       if (idx === undefined) continue;
@@ -210,6 +247,7 @@ export class GraphManager {
    * @param {Array<{source, target, color?, width?}>} patches
    */
   updateLinks(patches) {
+    if (this._destroyed) return;
     const patchMap = new Map(
       patches.map(p => [`${p.source}→${p.target}`, p]),
     );
@@ -229,6 +267,7 @@ export class GraphManager {
    * Nodes/links not in the map keep their current color.
    */
   recolor(nodeColorMap = new Map(), linkColorMap = new Map()) {
+    if (this._destroyed) return;
     for (const node of this.nodes) {
       const c = nodeColorMap.get(node.id);
       if (c !== undefined) node.color = c;
@@ -270,6 +309,7 @@ export class GraphManager {
   // ── Clear / Destroy ────────────────────────────────────
 
   clear() {
+    if (this._destroyed) return;
     this.nodes = [];
     this.nodeIndex.clear();
     this.links = [];
@@ -284,6 +324,10 @@ export class GraphManager {
     this.cosmos.setLinkColors(empty);
     this.cosmos.setLinkArrows(empty);
     this.cosmos.setLinkStrength(empty);
+    if (this._images.size > 0) {
+      this.cosmos.setPointImageIndices(empty);
+      this.cosmos.setPointImageSizes(empty);
+    }
     this.cosmos.render();
   }
 
@@ -384,40 +428,43 @@ export class GraphManager {
   }
 
   _flushLinks() {
-    const valid = this.links.filter(
-      l => this.nodeIndex.has(l.source) && this.nodeIndex.has(l.target),
-    );
-    const len = valid.length;
-
+    const len = this.links.length;
     const indices   = new Float32Array(len * 2);
     const widths    = new Float32Array(len);
     const colors    = new Float32Array(len * 4);
     const arrows    = new Float32Array(len);
     const strengths = new Float32Array(len);
 
+    let wi = 0;
     for (let i = 0; i < len; i++) {
-      const l = valid[i];
-      indices[i * 2]     = this.nodeIndex.get(l.source);
-      indices[i * 2 + 1] = this.nodeIndex.get(l.target);
-      widths[i] = this._linkWidth(l);
+      const l = this.links[i];
+      const srcIdx = this.nodeIndex.get(l.source);
+      const tgtIdx = this.nodeIndex.get(l.target);
+      if (srcIdx === undefined || tgtIdx === undefined) continue;
 
-      const [r, g, b] = hexToRgba(l.color ?? '#2a3a4a');
-      colors[i * 4]     = r;
-      colors[i * 4 + 1] = g;
-      colors[i * 4 + 2] = b;
-      colors[i * 4 + 3] = 0.8;
+      indices[wi * 2]     = srcIdx;
+      indices[wi * 2 + 1] = tgtIdx;
+      widths[wi] = this._linkWidth(l);
 
-      arrows[i] = l.directed !== false ? 1 : 0;
-      strengths[i] = l.weight !== undefined
+      const [r, g, b, a] = hexToRgba(l.color ?? '#2a3a4a');
+      colors[wi * 4]     = r;
+      colors[wi * 4 + 1] = g;
+      colors[wi * 4 + 2] = b;
+      colors[wi * 4 + 3] = a;
+
+      arrows[wi] = l.directed !== false ? 1 : 0;
+      strengths[wi] = l.weight !== undefined
         ? Math.min(Math.log2((l.weight || 1) + 1) / 6, 1)
         : 1.0;
+
+      wi++;
     }
 
-    this.cosmos.setLinks(indices);
-    this.cosmos.setLinkWidths(widths);
-    this.cosmos.setLinkColors(colors);
-    this.cosmos.setLinkArrows(arrows);
-    this.cosmos.setLinkStrength(strengths);
+    this.cosmos.setLinks(indices.subarray(0, wi * 2));
+    this.cosmos.setLinkWidths(widths.subarray(0, wi));
+    this.cosmos.setLinkColors(colors.subarray(0, wi * 4));
+    this.cosmos.setLinkArrows(arrows.subarray(0, wi));
+    this.cosmos.setLinkStrength(strengths.subarray(0, wi));
   }
 
   _linkWidth(link) {
@@ -441,7 +488,7 @@ export class GraphManager {
         sizes[i] = this.nodes[i].imageSize ?? this.nodes[i].size ?? 32;
         hasAny = true;
       } else {
-        indices[i] = -1;
+        indices[i] = 65535;
         sizes[i] = 0;
       }
     }
@@ -454,16 +501,13 @@ export class GraphManager {
 
   /** @returns {Promise<ImageData>} */
   async _toImageData(source, size) {
-    // Already ImageData
     if (source instanceof ImageData) return source;
 
-    // HTMLImageElement — draw to canvas
     if (source instanceof HTMLImageElement) {
       await this._awaitImgLoad(source);
       return this._imgToImageData(source, size);
     }
 
-    // String URL — load image
     if (typeof source === 'string') {
       const img = new Image();
       img.crossOrigin = 'anonymous';

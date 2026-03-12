@@ -30,6 +30,7 @@ const GraphView = forwardRef(function GraphView({ cosmosConfig, style }, ref) {
     addNodes:       (...a) => managerRef.current?.addNodes(...a),
     addLinks:       (...a) => managerRef.current?.addLinks(...a),
     removeNodes:    (...a) => managerRef.current?.removeNodes(...a),
+    removeLinks:    (...a) => managerRef.current?.removeLinks(...a),
     updateNode:     (...a) => managerRef.current?.updateNode(...a),
     updateNodes:    (...a) => managerRef.current?.updateNodes(...a),
     updateLinks:    (...a) => managerRef.current?.updateLinks(...a),
