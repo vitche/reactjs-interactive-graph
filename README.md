@@ -1,90 +1,88 @@
-# React.js Interactive Chart
+# reactjs-interactive-graph
 
-Interactive graph/chart component for React, built on top of **CosmoGraph**.
+A lightweight React wrapper around [cosmos.gl](https://cosmograph.app/) v2 for building interactive graph visualizations.
 
-This repository provides a reusable React wrapper and demo application for rendering large graph datasets with rich interactivity: node selection, hover states, filtering, zooming, highlighting, custom styling, and event-driven integration with the rest of your UI.
+cosmos.gl is a high-performance WebGL graph renderer, but its API is entirely index-based — you work with `Float32Array` buffers, point indices, and manual RGBA color values. This library adds a thin layer on top that lets you think in terms of nodes with IDs, hex colors, and incremental graph building, while keeping full access to cosmos.gl underneath.
 
----
+## Why
 
-## Overview
+The main problem this solves: **incrementally growing a graph without restarting the simulation**. Most cosmos.gl wrappers (including Cosmograph) restart the entire layout when you add new data. This library preserves existing node positions and gently integrates new nodes with a soft simulation restart.
 
-`reacts-interactive-chart` is intended for projects that need more than a static graph visualization. It extends the CosmoGraph rendering model with interactive capabilities suitable for dashboards, analytics tools, relationship explorers, knowledge graphs, security visualizations, and social/network maps.
+It's built for use cases like network explorers, blockchain transaction graphs, social graphs, and knowledge graphs — where you expand the graph step by step as the user navigates.
 
-The goal is to combine:
+## What it gives you
 
-- **high-performance graph rendering**
-- **React-friendly state management**
-- **interactive exploration**
-- **custom business logic hooks**
+- **ID-based API** — `{ id: 'alice', color: '#ff3366' }` instead of Float32Array indices
+- **Incremental add/remove** — add nodes and links without full graph restart
+- **Color and size management** — hex strings, automatic RGBA conversion
+- **Image support** — register icons/logos once, reference them by key on nodes
+- **Direct cosmos access** — `ref.current.cosmos.fitView()`, `ref.current.cosmos.pause()`, etc.
 
----
+Everything the library doesn't cover (camera, selection, simulation tuning, shapes, clustering, pinning, tracking, drag) is available directly through the cosmos.gl instance.
 
-## Features
+## Installation
 
-- Render large node-link graphs with **CosmoGraph**
-- React component API for easy integration
-- **Node hover** and **node click** interactions
-- **Edge highlighting** for connected nodes
-- **Node selection** and active state tracking
-- **Search and filtering** support
-- **Dynamic styling** based on data attributes
-- **Zoom / pan / focus** controls
-- **External control hooks** for side panels, inspectors, and toolbars
-- Optional support for:
-  - clusters / groups
-  - contextual tooltips
-  - graph legends
-  - selection synchronization with external components
-  - graph updates from live data streams
+```bash
+npm install git+https://github.com/vitche/reactjs-interactive-graph.git
+```
 
----
+Peer dependencies:
 
-## Use Cases
+```bash
+npm install react @cosmos.gl/graph
+```
 
-This project is useful for:
+## Quick Start
 
-- social graph exploration
-- blockchain transaction relationship graphs
-- security event correlation maps
-- dependency and service topology diagrams
-- knowledge graph UIs
-- recommendation network visualization
-- entity relationship analysis tools
+```jsx
+import { useRef } from 'react';
+import { GraphView } from 'reactjs-interactive-graph';
 
----
+function App() {
+  const ref = useRef();
 
-## Why this project
+  const load = () => {
+    ref.current.addNodes(
+      [
+        { id: 'alice', color: '#ff3366', size: 12 },
+        { id: 'bob',   color: '#00d4ff' },
+        { id: 'carol', color: '#22c55e' },
+      ],
+      [
+        { source: 'alice', target: 'bob' },
+        { source: 'alice', target: 'carol' },
+      ],
+    );
+  };
 
-CosmoGraph is excellent for performant graph rendering, but many real-world applications also need a layer of application interactivity around it.  
-This repository focuses on that layer.
+  return (
+    <div style={{ width: '100vw', height: '100vh' }}>
+      <button onClick={load}>Load</button>
+      <GraphView ref={ref} cosmosConfig={{ enableDrag: true }} />
+    </div>
+  );
+}
+```
 
-Examples of interactive behavior supported by the project:
+Works without React too:
 
-- click a node to open a details sidebar
-- hover a node to highlight its immediate neighbors
-- filter the graph by category, weight, or label
-- synchronize selected nodes with URL params or app state
-- drive visual emphasis from external controls
-- react to graph events inside your React app
+```js
+import { GraphManager } from 'reactjs-interactive-graph';
 
----
+const gm = new GraphManager(document.getElementById('graph'));
+gm.addNodes([{ id: 'a' }, { id: 'b' }], [{ source: 'a', target: 'b' }]);
+gm.cosmos.fitView();
+```
 
-## Planned Component API
+## Documentation
 
-Example idea:
+- **[Library API](docs/reactjs-interactive-graph.md)** — full reference for GraphManager and GraphView
+- **[cosmos.gl Reference](docs/cosmos-gl-reference.md)** — cosmos.gl v2 API adapted for use with this library
+- **[Examples](docs/examples.md)** — Quick Start, 100×100 Grid, Point Labels with CSS overlays
 
-```tsx
-<InteractiveChart
-  nodes={nodes}
-  links={links}
-  selectedNodeId={selectedNodeId}
-  onNodeClick={handleNodeClick}
-  onNodeHover={handleNodeHover}
-  onSelectionChange={handleSelectionChange}
-  filters={filters}
-  config={{
-    nodeSize: "score",
-    nodeColor: "group",
-    linkWidth: "weight",
-  }}
-/>
+## Development
+
+```bash
+npm install
+npm run build
+```

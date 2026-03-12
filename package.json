@@ -1,0 +1,32 @@
+{
+  "name": "reactjs-interactive-graph",
+  "version": "0.1.0",
+  "description": "WebGL graph visualization library built on cosmos.gl",
+  "type": "module",
+  "main": "dist/reactjs-interactive-graph.umd.cjs",
+  "module": "dist/reactjs-interactive-graph.js",
+  "exports": {
+    ".": {
+      "import": "./dist/reactjs-interactive-graph.js",
+      "require": "./dist/reactjs-interactive-graph.umd.cjs"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "@cosmos.gl/graph": ">=2"
+  },
+  "devDependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "@cosmos.gl/graph": "^2.6.4",
+    "@vitejs/plugin-react": "^5.1.1",
+    "vite": "^7.3.1"
+  },
+  "keywords": ["graph", "cosmos", "webgl", "visualization", "react"],
+  "license": "MIT"
+}
