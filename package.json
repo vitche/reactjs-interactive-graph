@@ -19,9 +19,7 @@
   },
   "peerDependencies": {
     "react": ">=18",
-    "@cosmos.gl/graph": ">=2"
-  },
-  "devDependencies": {
+    "@cosmos.gl/graph": ">=2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "@cosmos.gl/graph": "^2.6.4",
