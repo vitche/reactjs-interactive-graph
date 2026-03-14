@@ -1,6 +1,6 @@
 {
   "name": "reactjs-interactive-graph",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "WebGL graph visualization library built on cosmos.gl",
   "type": "module",
   "main": "dist/reactjs-interactive-graph.umd.cjs",
@@ -16,7 +16,7 @@
     "build": "vite build",
     "dev": "vite build --watch",
     "prepare": "npm run build",
-    "postinstall": "cd node_modules/reactjs-interactive-graph && npm install && npm run build"
+    "postinstall": "cd $INIT_CWD/node_modules/reactjs-interactive-graph && npm install && npm run build"
   },
   "peerDependencies": {
     "react": ">=18",
